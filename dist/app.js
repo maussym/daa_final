@@ -15,6 +15,10 @@ const icons = {
   next: '<path d="m9 18 6-6-6-6"/>',
   check: '<path d="m4 12 5 5 11-11"/>',
   menu: '<path d="M4 6h16M4 12h16M4 18h16"/>',
+  close: '<path d="m6 6 12 12M18 6 6 18"/>',
+  panel: '<rect x="3" y="5" width="18" height="14" rx="2"/><path d="M9 5v14"/>',
+  sun: '<circle cx="12" cy="12" r="4"/><path d="M12 2v2m0 16v2M2 12h2m16 0h2M5 5l1.5 1.5m11 11L19 19M5 19l1.5-1.5m11-11L19 5"/>',
+  moon: '<path d="M20.7 15.4A9 9 0 0 1 8.6 3.3 9 9 0 1 0 20.7 15.4Z"/>',
   shuffle: '<path d="M3 6h3c5 0 7 12 12 12h3m-3-3 3 3-3 3M3 18h3c1.6 0 2.9-1.3 4.1-3.2M14 9.2C15.2 7.3 16.4 6 18 6h3m-3-3 3 3-3 3"/>',
   user: '<circle cx="12" cy="8" r="3"/><path d="M6 20v-2a6 6 0 0 1 12 0v2"/>',
 };
@@ -27,6 +31,9 @@ const sidebar = document.querySelector('#sidebar');
 const topbar = document.querySelector('#topbar');
 const veil = document.querySelector('#veil');
 const notice = document.querySelector('#notice');
+const layout = document.querySelector('.layout');
+const themeMeta = document.querySelector('meta[name="theme-color"]');
+const mobileLayout = matchMedia('(max-width: 760px)');
 const storageKey = 'daa-final-prep-v1';
 const allQuestions = [...course.samples, ...course.practice];
 const questionById = new Map(allQuestions.map(q => [q.id,q]));
@@ -53,6 +60,8 @@ const path = () => {
   return titles.has(page) || page === 'lesson' ? [page,Number(id)] : ['home',0];
 };
 const storedUI = state.ui || {};
+let theme = storedUI.theme === 'light' ? 'light' : 'dark';
+let sidebarCollapsed = storedUI.sidebarCollapsed === true;
 let filterWeek = storedUI.filterWeek ?? 0;
 let filterText = storedUI.filterText ?? '';
 const sampleSelections = storedUI.sampleSelections ?? {};
@@ -70,6 +79,7 @@ let noticeTimer;
 let heroObserver;
 function save() {
   state.ui = {
+    theme, sidebarCollapsed,
     filterWeek, filterText, sampleSelections, sampleFeedback,
     cardWeek, cardMode, deck, cardPos, flipped, config, openCode,
     showResult: examResult !== null, reviewFilter,
@@ -118,13 +128,37 @@ function tile(route,icon,theme,title,description) {
 }
 function btnNav(page) {
   const active = page === 'lesson' ? 'lessons' : page;
-  sidebar.innerHTML = '<a class="brand" href="#home"><img src="./mark.svg" alt=""><span><b>DAA Final Prep</b><small>AITU · RiAA 2310</small></span></a>'+
+  sidebar.innerHTML = '<a class="brand" href="#home" aria-label="DAA Final Prep" title="DAA Final Prep"><img src="./mark.svg" alt=""><span class="brand-text"><b>DAA Final Prep</b><small>AITU · RiAA 2310</small></span></a>'+
+    '<button type="button" class="icon-button drawer-close" data-do="drawer-close" aria-label="Close sidebar">'+ico('close')+'</button>'+
     '<nav aria-label="Study navigation">'+nav.map(([group,items]) =>
-    '<div class="nav-group"><span class="nav-label">'+group+'</span>'+items.map(([route,name,icon]) =>
-    '<a class="nav-link '+(active === route ? 'active' : '')+'" href="#'+route+'"'+(active === route ? ' aria-current="page"' : '')+'>'+ico(icon)+escape(name)+(route === 'errors' && errors().length ? '<span class="nav-count">'+errors().length+'</span>' : '')+'</a>').join('')+'</div>').join('')+'</nav>'+
-    '<div class="side-bottom"><a class="side-progress" href="#progress"><small>Course progress <strong>'+countDone()+'/10</strong></small>'+meter(countDone()*10)+'</a></div>';
+    '<div class="nav-group"><span class="nav-label">'+group+'</span>'+items.map(([route,name,icon]) => {
+      const count = route === 'errors' ? errors().length : 0;
+      return '<a class="nav-link '+(active === route ? 'active' : '')+'" href="#'+route+'" title="'+escape(name)+'" aria-label="'+escape(name+(count?' '+count:''))+'"'+
+        (active === route ? ' aria-current="page"' : '')+'>'+ico(icon)+'<span class="nav-text">'+escape(name)+'</span>'+
+        (count ? '<span class="nav-count">'+count+'</span>' : '')+'</a>';
+    }).join('')+'</div>').join('')+'</nav>'+
+    '<div class="side-bottom"><a class="side-progress" href="#progress" title="Course progress" aria-label="Course progress '+countDone()+' of 10"><small>Course progress <strong>'+countDone()+'/10</strong></small>'+meter(countDone()*10)+'</a></div>';
   const shown = page === 'lesson' ? 'Lesson notes' : titles.get(page);
-  topbar.innerHTML = '<div class="breadcrumb"><button type="button" class="icon-button menu-toggle" data-do="menu" aria-expanded="'+sidebar.classList.contains('open')+'" aria-controls="sidebar" aria-label="Open navigation">'+ico('menu')+'</button><a href="#home">DAA 2310</a>'+ico('next')+'<strong>'+escape(shown)+'</strong></div><div class="top-end"><span class="course-label">Design &amp; Analysis of Algorithms</span><a class="avatar" href="#progress" aria-label="View your progress">'+ico('user')+'</a></div>';
+  topbar.innerHTML = '<div class="breadcrumb"><button type="button" class="icon-button menu-toggle" data-do="menu" aria-controls="sidebar"></button><a href="#home">DAA 2310</a>'+ico('next')+'<strong>'+escape(shown)+'</strong></div><div class="top-end"><span class="course-label">Design &amp; Analysis of Algorithms</span><button type="button" class="icon-button" data-do="theme"></button><a class="avatar" href="#progress" aria-label="View your progress">'+ico('user')+'</a></div>';
+  syncAppearance();
+}
+function syncAppearance() {
+  document.documentElement.dataset.theme=theme;
+  layout.dataset.sidebar=sidebarCollapsed?'collapsed':'expanded';
+  themeMeta.content=theme==='light'?'#f3f6ef':'#111410';
+  const menu=topbar.querySelector('[data-do="menu"]');
+  const isMobile=mobileLayout.matches;
+  const expanded=isMobile?sidebar.classList.contains('open'):!sidebarCollapsed;
+  const menuLabel=expanded?(isMobile?'Close navigation':'Collapse sidebar'):(isMobile?'Open navigation':'Expand sidebar');
+  menu.setAttribute('aria-expanded',String(expanded));
+  menu.setAttribute('aria-label',menuLabel);
+  menu.title=menuLabel;
+  menu.innerHTML=ico(isMobile?(expanded?'close':'menu'):'panel');
+  const toggle=topbar.querySelector('[data-do="theme"]');
+  const themeLabel=theme==='light'?'Switch to dark theme':'Switch to light theme';
+  toggle.setAttribute('aria-label',themeLabel);
+  toggle.title=themeLabel;
+  toggle.innerHTML=ico(theme==='light'?'moon':'sun');
 }
 function lessonCard(lesson) {
   return '<a class="lesson-card" href="#lesson/'+lesson.id+'"><span class="lesson-index">'+two(lesson.id)+'</span><div><div class="lesson-meta">'+escape(lesson.group)+'</div><h3>'+escape(lesson.name)+'</h3><p>'+escape(lesson.description)+'</p></div>'+ico(state.completed[lesson.id] ? 'check' : 'next')+'</a>';
@@ -358,7 +392,7 @@ function examPage() {
 function closeMenu() {
   sidebar.classList.remove('open');
   veil.hidden=true;
-  topbar.querySelector('.menu-toggle')?.setAttribute('aria-expanded','false');
+  syncAppearance();
 }
 function navigate(route) {
   closeMenu();
@@ -387,18 +421,21 @@ function drawGraph(canvas) {
   canvas.height=Math.round(h*dpr);
   const c=canvas.getContext('2d');
   c.scale(dpr,dpr);
+  const paper=theme==='light';
   const centerX=w*.74,centerY=h*.50;
   const light=c.createRadialGradient(centerX,centerY,1,centerX,centerY,w*.47);
-  light.addColorStop(0,'#405928'); light.addColorStop(.54,'#273922'); light.addColorStop(1,'#172217');
+  light.addColorStop(0,paper?'#d1e7a7':'#405928');
+  light.addColorStop(.54,paper?'#e2efce':'#273922');
+  light.addColorStop(1,paper?'#f0f5e8':'#172217');
   c.fillStyle=light; c.fillRect(0,0,w,h);
-  c.fillStyle='#d7ff9d30';
+  c.fillStyle=paper?'#53703940':'#d7ff9d30';
   for (let x=13;x<w;x+=18) for (let y=12;y<h;y+=18) c.fillRect(x,y,1,1);
   const size=Math.min(w*.96,h*1.54);
   const nodes=[[-.35,.15],[-.30,-.18],[-.08,-.30],[.18,-.25],[.34,-.06],[.25,.22],[-.02,.3],[-.11,.015],[.10,.04],[-.22,.235],[.42,.12]];
   const edges=[[0,1],[0,7],[0,9],[1,2],[1,7],[2,3],[2,7],[3,4],[3,8],[4,8],[4,5],[4,10],[5,6],[5,8],[5,10],[6,7],[6,8],[6,9],[7,8],[7,9]];
   c.save();
   c.translate(centerX,centerY);
-  c.strokeStyle='#b4d48426'; c.lineWidth=1;
+  c.strokeStyle=paper?'#59773532':'#b4d48426'; c.lineWidth=1;
   for (let r of [.20,.32,.435]) { c.beginPath();c.arc(0,0,size*r,0,Math.PI*2);c.stroke(); }
   c.setLineDash([4,6]);
   c.beginPath(); c.moveTo(-size*.48,0);c.lineTo(size*.47,0);c.moveTo(0,-h*.44);c.lineTo(0,h*.44);c.stroke();
@@ -409,21 +446,21 @@ function drawGraph(canvas) {
     const [a,b]=edge.map(i=>coords[i]);
     const strong=active.has(edge.join(','));
     c.lineWidth=strong?1.6:1;
-    c.strokeStyle=strong?'#d7fda1bd':'#accc7d45';
-    if(strong){c.shadowColor='#c9f477';c.shadowBlur=9;}
+    c.strokeStyle=paper?(strong?'#497123b0':'#6f92454f'):(strong?'#d7fda1bd':'#accc7d45');
+    if(strong&&!paper){c.shadowColor='#c9f477';c.shadowBlur=9;}
     c.beginPath();c.moveTo(...a);c.lineTo(...b);c.stroke();
     c.shadowBlur=0;
   }
   for (const [i,[x,y]] of coords.entries()) {
     const major=[1,2,4,7,8].includes(i);
     const glow=c.createRadialGradient(x,y,2,x,y,major?25:17);
-    glow.addColorStop(0,'#d8ff9a70');glow.addColorStop(1,'#d8ff9a00');
+    glow.addColorStop(0,paper?'#93ba5c40':'#d8ff9a70');glow.addColorStop(1,'#d8ff9a00');
     c.fillStyle=glow;c.beginPath();c.arc(x,y,major?25:17,0,Math.PI*2);c.fill();
-    c.strokeStyle='#bfeb8e88';c.lineWidth=1;c.beginPath();c.arc(x,y,major?9:7,0,Math.PI*2);c.stroke();
-    c.fillStyle=major?'#e4ffb5':'#abc982';c.beginPath();c.arc(x,y,major?3.7:2.6,0,Math.PI*2);c.fill();
+    c.strokeStyle=paper?'#5a82368a':'#bfeb8e88';c.lineWidth=1;c.beginPath();c.arc(x,y,major?9:7,0,Math.PI*2);c.stroke();
+    c.fillStyle=paper?(major?'#426627':'#69834f'):(major?'#e4ffb5':'#abc982');c.beginPath();c.arc(x,y,major?3.7:2.6,0,Math.PI*2);c.fill();
   }
   if(w>660) {
-    c.font='10px monospace';c.fillStyle='#d6f5afab';
+    c.font='10px monospace';c.fillStyle=paper?'#3f5b2b':'#d6f5afab';
     for(const [i,label] of [[1,'A'],[2,'B'],[4,'C'],[5,'D'],[6,'E']]) {
       const [x,y]=coords[i];c.fillText(label,x+11,y-8);
     }
@@ -472,8 +509,28 @@ document.addEventListener('click', event => {
   const id=button.dataset.id;
   const which=Number(id);
   if (name==='menu') {
-    if(sidebar.classList.contains('open')) closeMenu();
-    else { sidebar.classList.add('open');veil.hidden=false;button.setAttribute('aria-expanded','true');sidebar.querySelector('a').focus(); }
+    if (!mobileLayout.matches) {
+      sidebarCollapsed=!sidebarCollapsed;
+      save();
+      syncAppearance();
+    } else if (sidebar.classList.contains('open')) closeMenu();
+    else {
+      sidebar.classList.add('open');
+      veil.hidden=false;
+      syncAppearance();
+      sidebar.querySelector('a').focus();
+    }
+  }
+  if (name==='theme') {
+    theme=theme==='light'?'dark':'light';
+    save();
+    syncAppearance();
+    const graph=main.querySelector('.hero-canvas');
+    if(graph) drawGraph(graph);
+  }
+  if (name==='drawer-close') {
+    closeMenu();
+    topbar.querySelector('.menu-toggle').focus();
   }
   if(name==='complete') { state.completed[id]=!state.completed[id];save();render();toast(state.completed[id]?'Lesson marked complete':'Lesson marked incomplete'); }
   if(name==='week-cards') { cardWeek=which;cardMode='all';resetDeck();save();navigate('cards'); }
@@ -552,6 +609,7 @@ main.addEventListener('change',event=>{
   if(id==='result-filter') { reviewFilter=value;save();render();main.querySelector('#result-filter')?.focus(); }
 });
 veil.addEventListener('click',()=>{closeMenu();topbar.querySelector('.menu-toggle')?.focus();});
+mobileLayout.addEventListener('change',closeMenu);
 document.addEventListener('keydown',event=>{
   if(event.key==='Escape' && sidebar.classList.contains('open')) { closeMenu();topbar.querySelector('.menu-toggle')?.focus(); }
 });

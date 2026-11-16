@@ -5,8 +5,20 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="theme-color" content="#111410">
   <meta name="description" content="Study Design and Analysis of Algorithms with lessons, flashcards, exam samples and timed practice.">
+  <meta name="application-name" content="DAA Final Prep">
+  <meta name="apple-mobile-web-app-title" content="DAA Prep">
   <title>DAA Final Prep</title>
-  <link rel="icon" href="./mark.svg" type="image/svg+xml">
+  <link rel="icon" href="./favicon.png" sizes="32x32" type="image/png">
+  <link rel="icon" href="./mark.svg" sizes="any" type="image/svg+xml">
+  <link rel="apple-touch-icon" href="./apple-touch-icon.png" sizes="180x180">
+  <script>
+    try {
+      if (JSON.parse(localStorage.getItem('daa-final-prep-v1'))?.ui?.theme === 'light') {
+        document.documentElement.dataset.theme = 'light';
+        document.querySelector('meta[name="theme-color"]').content = '#f3f6ef';
+      }
+    } catch {}
+  </script>
   <link rel="stylesheet" href="./style.css">
   <script type="module" src="./app.js"></script>
 </head>
